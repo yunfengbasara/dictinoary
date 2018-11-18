@@ -1,0 +1,75 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClInclude Include="stdafx.h" />
+    <ClInclude Include="targetver.h" />
+    <ClInclude Include="MsgThread.h">
+      <Filter>thread</Filter>
+    </ClInclude>
+    <ClInclude Include="PostCmd.h">
+      <Filter>thread</Filter>
+    </ClInclude>
+    <ClInclude Include="Log.h">
+      <Filter>log</Filter>
+    </ClInclude>
+    <ClInclude Include="LogApi.h">
+      <Filter>log</Filter>
+    </ClInclude>
+    <ClInclude Include="Timer.h">
+      <Filter>timer</Filter>
+    </ClInclude>
+    <ClInclude Include="convert.h">
+      <Filter>convert</Filter>
+    </ClInclude>
+    <ClInclude Include="NetTcp.h">
+      <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="NetApi.h">
+      <Filter>net</Filter>
+    </ClInclude>
+    <ClInclude Include="TcpLink.h">
+      <Filter>net</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="stdafx.cpp" />
+    <ClCompile Include="MsgThread.cpp">
+      <Filter>thread</Filter>
+    </ClCompile>
+    <ClCompile Include="Log.cpp">
+      <Filter>log</Filter>
+    </ClCompile>
+    <ClCompile Include="LogApi.cpp">
+      <Filter>log</Filter>
+    </ClCompile>
+    <ClCompile Include="Timer.cpp">
+      <Filter>timer</Filter>
+    </ClCompile>
+    <ClCompile Include="convert.cpp">
+      <Filter>convert</Filter>
+    </ClCompile>
+    <ClCompile Include="NetTcp.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
+    <ClCompile Include="TcpLink.cpp">
+      <Filter>net</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="thread">
+      <UniqueIdentifier>{4558fc22-fa9d-48a9-acbc-474af61a2042}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="log">
+      <UniqueIdentifier>{267df20a-c6c5-416c-903a-4dd801bd7ce0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="timer">
+      <UniqueIdentifier>{e3b7ed6c-7267-40ae-9dc5-47ddc8e01a8d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="convert">
+      <UniqueIdentifier>{3fd18dcf-aab8-40d4-840f-bea3427c058a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="net">
+      <UniqueIdentifier>{f88c5fb6-cf03-4b75-afd9-dc5372e6a41a}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
