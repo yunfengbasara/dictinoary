@@ -4,6 +4,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "dictionary", "dictionary\dictionary.vcxproj", "{E15FD7B5-356D-4C6C-9595-DB31A1C2DDD1}"
+	ProjectSection(ProjectDependencies) = postProject
+		{8A641949-FC42-4F89-8148-857FCABA1B87} = {8A641949-FC42-4F89-8148-857FCABA1B87}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "commfile", "commfile\commfile.vcxproj", "{8A641949-FC42-4F89-8148-857FCABA1B87}"
 EndProject

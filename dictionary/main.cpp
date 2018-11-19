@@ -52,20 +52,22 @@ private:
 
 int main()
 {
-	CNetTcp netCore;
-	netCore.Init();
-	netCore.Uninit();
-
 	LogStart();
 
-	CAnalyze dict;
-	dict.PostCmd_StartAnalyzeEcdict();
-	dict.PostCmd_ReadFile();
-	while (true) {
-		std::basic_string<char> word;
-		std::getline(std::cin, word);
-		dict.PostCmd_QueryWord(word);
-	}
+	CNetTcp netCore;
+	netCore.Init();
+
+	getchar();
+	//netCore.Uninit();
+
+	//CAnalyze dict;
+	//dict.PostCmd_StartAnalyzeEcdict();
+	//dict.PostCmd_ReadFile();
+	//while (true) {
+	//	std::basic_string<char> word;
+	//	std::getline(std::cin, word);
+	//	dict.PostCmd_QueryWord(word);
+	//}
 
 	LogStop();
     return 0;

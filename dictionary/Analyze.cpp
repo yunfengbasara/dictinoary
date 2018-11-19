@@ -110,7 +110,7 @@ bool CAnalyze::SerializeEcdict()
 {
 	std::basic_string<char> msg;
 	std::ofstream wordlist;
-	wordlist.open("D:\\code\\cproj\\dictinoary\\dictionary\\Debug\\bookdraft2017nov5_trans.txt", std::ios::out);
+	wordlist.open("D:\\code\\cproj\\dictinoary\\Debug\\bookdraft2017nov5_trans.txt", std::ios::out);
 	for (auto &item : m_trans) {
 		wchar2UTF8(item.first, msg);
 		wordlist << msg;
@@ -130,7 +130,7 @@ bool CAnalyze::ReadFile()
 	std::set<std::basic_string<char>> wordlist;
 
 	std::ifstream bookfile;
-	bookfile.open("D:\\code\\cproj\\dictinoary\\dictionary\\Debug\\bookdraft2017nov5.txt");
+	bookfile.open("D:\\code\\cproj\\dictinoary\\Debug\\bookdraft2017nov5.txt");
 
 	std::basic_string<char> word;
 	char letter;
