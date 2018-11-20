@@ -19,6 +19,7 @@
 #include <thread>
 #include <list>
 #include <vector>
+#include <map>
 #include <ctime>
 
 #include <winsock2.h>

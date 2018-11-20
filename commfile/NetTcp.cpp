@@ -2,6 +2,7 @@
 #include "NetTcp.h"
 #include "TcpLink.h"
 #include "LogApi.h"
+#include "convert.h"
 
 CNetTcp::CNetTcp()
 	: m_hIOCP(NULL)
@@ -38,25 +39,30 @@ bool CNetTcp::Init(int threadN)
 	}
 
 	// test
-	std::shared_ptr<CTcpLink> server(new CTcpLink(m_hIOCP));
+	TcpLink server(new CTcpLink(m_hIOCP));
 	server->CreateServer("", 8888);
 	server->Listen();
 
-	std::shared_ptr<CTcpLink> client(new CTcpLink(m_hIOCP));
+	TcpLink client(new CTcpLink(m_hIOCP));
 	client->CreateClient();
+
+	// 提前放如队列
+	m_lLinkList.insert(std::make_pair(server->GetSocket(), server));
+	m_lLinkList.insert(std::make_pair(client->GetSocket(), client));
+	LogWrite(INFO, _T("Server Link %d"), server->GetSocket());
+	LogWrite(INFO, _T("Client Link %d"), client->GetSocket());
+
 	client->Connect("", 8888);
 
-	m_lLinkList.push_back(client);
-	m_lLinkList.push_back(server);
 	return true;
 }
 
 bool CNetTcp::Uninit()
 {
 	for (auto &pThread : m_lIocpNetPool) {
-		auto pOvlp = new OVLPSTRUCT;
-		pOvlp->event = NET_EVENT::NET_CLOS;
-		::PostQueuedCompletionStatus(m_hIOCP, 0, NET_EVENT::NET_CLOS, &pOvlp->ovlp);
+		// win10 sdk可直接使用智能指针
+		EXITOVLP *pOvlp = new EXITOVLP;
+		::PostQueuedCompletionStatus(m_hIOCP, 0, 0, &pOvlp->ovlp);
 	}
 
 	for (auto &pThread : m_lIocpNetPool) {
@@ -72,38 +78,137 @@ void CNetTcp::IOCPRoutine(HANDLE hIOCP)
 	LPOVERLAPPED pOvlp = NULL;
 	DWORD dwStatus = 0;	// 返回状态
 	while (true) {
-		if (::GetQueuedCompletionStatus(hIOCP, &dwBytes, &nEvent, &pOvlp, INFINITE)) {
-			dwStatus = ERROR_SUCCESS;
-		}
-		else {
-			dwStatus = GetLastError();
+		dwStatus = ERROR_SUCCESS;
+		if (!::GetQueuedCompletionStatus(hIOCP, 
+			&dwBytes, &nEvent, &pOvlp, INFINITE)) {
+
+			// 关闭socket响应
+			dwStatus = WSAGetLastError();	
+			auto pContext = CONTAINING_RECORD(pOvlp, OVLPSTRUCT, ovlp);
+			CLOSOVLP* pClos = (CLOSOVLP*)pContext;
+			std::shared_ptr<CLOSOVLP> pClose(pClos);
+			{
+				std::unique_lock<std::mutex> lock(m_nMutex);
+				m_lLinkList.erase(pClose->hSock);
+			}
+			continue;
 		}
 
+		// OVLP转自定义结构
 		auto pContext = CONTAINING_RECORD(pOvlp, OVLPSTRUCT, ovlp);
-		std::shared_ptr<OVLPSTRUCT> pShareOvlp(pContext);
+		pContext->dwBytes = dwBytes;
 
-		if (pShareOvlp->event == NET_EVENT::NET_CLOS) {
-			break;
+		switch (pContext->event) {
+		case NET_CONN: {
+			CONNOVLP* p = (CONNOVLP*)pContext;
+			std::shared_ptr<CONNOVLP> pShareOvlp(p);
+			OnConn(pShareOvlp);
+		}break;
+		case NET_SEND: {
+			SENDOVLP* p = (SENDOVLP*)pContext;
+			std::shared_ptr<SENDOVLP> pShareOvlp(p);
+			OnSend(pShareOvlp);
+		}break;
+		case NET_RECV: {
+			RECVOVLP* p = (RECVOVLP*)pContext;
+			std::shared_ptr<RECVOVLP> pShareOvlp(p);
+			OnRecv(pShareOvlp);
+		}break;
+		case NET_ACPT: {
+			ACPTOVLP* p = (ACPTOVLP*)pContext;
+			std::shared_ptr<ACPTOVLP> pShareOvlp(p);
+			OnAcpt(pShareOvlp);
+		}break;
+		case NET_CLOS: {
+			CLOSOVLP* p = (CLOSOVLP*)pContext;
+			std::shared_ptr<CLOSOVLP> pShareOvlp(p);
+			OnClos(pShareOvlp);
+		}break;
+		case NET_EXIT: {
+			EXITOVLP* p = (EXITOVLP*)pContext;
+			std::shared_ptr<EXITOVLP> pShareOvlp(p);
+			return;
+		}break;
 		}
-	
-		IOCPCompletionFunc(dwStatus, dwBytes, pShareOvlp);
 	}
 }
 
-void CNetTcp::IOCPCompletionFunc(DWORD dwStatus, DWORD dwBytes, std::shared_ptr<OVLPSTRUCT> pContext)
+void CNetTcp::OnConn(std::shared_ptr<CONNOVLP> pOvlp)
 {
-	switch (pContext->event) {
-	case NET_ACPT: {
-		int i = 0;
+	TcpLink pLink;
+	{
+		std::unique_lock<std::mutex> lock(m_nMutex);
+		auto pit = m_lLinkList.find(pOvlp->hSock);
+		if (pit == m_lLinkList.end()) {
+			return;
+		}
+		pLink = pit->second;
 	}
-		break;
-	case NET_SEND: {
-		int i = 0;
+
+	pLink->Recv();
+	pLink->Send("hello world", 11);
+	pLink->Close();
+}
+
+void CNetTcp::OnSend(std::shared_ptr<SENDOVLP> pOvlp)
+{
+	std::basic_string<char> str((char*)pOvlp->data, pOvlp->dwBytes);
+	std::basic_string<wchar_t> wstr;
+	char2wchar(str, wstr);
+	LogWrite(INFO, _T("OnSend %s"), wstr.c_str());
+}
+
+void CNetTcp::OnRecv(std::shared_ptr<RECVOVLP> pOvlp)
+{
+	std::basic_string<char> str((char*)pOvlp->data, pOvlp->dwBytes);
+	std::basic_string<wchar_t> wstr;
+	char2wchar(str, wstr);
+	LogWrite(INFO, _T("OnRecv %s"), wstr.c_str());
+
+	{
+		std::unique_lock<std::mutex> lock(m_nMutex);
+		auto pit = m_lLinkList.find(pOvlp->hSock);
+		if (pit == m_lLinkList.end()) {
+			return;
+		}
+		if (!pit->second->Recv()) {
+			pit->second->Close();
+		}
 	}
-		break;
-	case NET_RECV: {
-		int i = 0;
+}
+
+void CNetTcp::OnAcpt(std::shared_ptr<ACPTOVLP> pOvlp)
+{
+	TcpLink pAccept(new CTcpLink(m_hIOCP, pOvlp->hAcceptSock));
+	{
+		std::unique_lock<std::mutex> lock(m_nMutex);
+		auto it = m_lLinkList.find(pOvlp->hSock);
+		if (it != m_lLinkList.end()) {
+			it->second->Accept();
+		}
+		LogWrite(INFO, _T("OnAcpt Link %d"), pAccept->GetSocket());
+		m_lLinkList.insert(std::make_pair(pAccept->GetSocket(), pAccept));
 	}
-		break;
+
+	//SOCKADDR* psaLocal = NULL;
+	//SOCKADDR* psaRemote = NULL;
+	//int nLocalLen, nRemoteLen;
+	//GetAcceptExSockaddrs(pOvlp->data, 0,
+	//	sizeof(SOCKADDR_IN) + 16,
+	//	sizeof(SOCKADDR_IN) + 16,
+	//	&psaLocal, &nLocalLen,
+	//	&psaRemote, &nRemoteLen);
+
+	if (!pAccept->Recv()) {
+		pAccept->Close();
+	}
+}
+
+void CNetTcp::OnClos(std::shared_ptr<CLOSOVLP> pOvlp)
+{
+	closesocket(pOvlp->hSock);
+	{
+		std::unique_lock<std::mutex> lock(m_nMutex);
+		m_lLinkList.erase(pOvlp->hSock);
 	}
 }

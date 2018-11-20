@@ -14,10 +14,17 @@ public:
 
 private:
 	void IOCPRoutine(HANDLE hIOCP);
-	void IOCPCompletionFunc(DWORD dwStatus, DWORD dwBytes, std::shared_ptr<OVLPSTRUCT> pContext);
+
+	void OnConn(std::shared_ptr<CONNOVLP> pOvlp);
+	void OnSend(std::shared_ptr<SENDOVLP> pOvlp);
+	void OnRecv(std::shared_ptr<RECVOVLP> pOvlp);
+	void OnAcpt(std::shared_ptr<ACPTOVLP> pOvlp);
+	void OnClos(std::shared_ptr<CLOSOVLP> pOvlp);
 
 private:
 	HANDLE											m_hIOCP;			// IOCP通知句柄
 	std::vector<std::thread>						m_lIocpNetPool;		// IOCP事件线程池
-	std::list<std::shared_ptr<CTcpLink>>			m_lLinkList;		// IOCP管理通知的SOCKET链表
+	typedef std::shared_ptr<CTcpLink>				TcpLink;
+	std::mutex										m_nMutex;
+	std::map<SOCKET, TcpLink>						m_lLinkList;		// IOCP管理通知的SOCKET链表
 };
