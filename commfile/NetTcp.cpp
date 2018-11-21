@@ -135,6 +135,8 @@ void CNetTcp::IOCPRoutine(HANDLE hIOCP)
 
 void CNetTcp::OnConn(std::shared_ptr<CONNOVLP> pOvlp)
 {
+	setsockopt(pOvlp->hSock, SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, NULL, 0);
+
 	TcpLink pLink;
 	{
 		std::unique_lock<std::mutex> lock(m_nMutex);
@@ -144,6 +146,16 @@ void CNetTcp::OnConn(std::shared_ptr<CONNOVLP> pOvlp)
 		}
 		pLink = pit->second;
 	}
+
+	SOCKADDR_IN local;
+	ZeroMemory(&local, sizeof(local));
+	int locallen = sizeof(SOCKADDR_IN);
+	getsockname(pOvlp->hSock, (PSOCKADDR)&local, &locallen);
+
+	SOCKADDR_IN remote;
+	ZeroMemory(&remote, sizeof(remote));
+	int remotelen = sizeof(SOCKADDR_IN);
+	getpeername(pOvlp->hSock, (PSOCKADDR)&remote, &remotelen);
 
 	pLink->Recv();
 	pLink->Send("hello world", 11);

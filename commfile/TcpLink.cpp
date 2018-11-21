@@ -150,21 +150,22 @@ bool CTcpLink::CreateServer(const std::string addr, uint32_t port)
 	lgr.l_linger = 0;
 	setsockopt(m_hSock, SOL_SOCKET, SO_LINGER, (const char *)&lgr, sizeof(struct linger));
 
-	SOCKADDR_IN saLocal;
-	saLocal.sin_family = AF_INET;
-	saLocal.sin_port = htons(port);
-	if (addr == "") {
-		LPHOSTENT lphost = gethostbyname("");
+	unsigned long saddr = inet_addr(addr.c_str());
+	if (saddr == INADDR_NONE) {
+		LPHOSTENT lphost = gethostbyname(addr.c_str());
 		if (lphost == NULL) {
 			return false;
 		}
-		char* pip = inet_ntoa(*(struct in_addr *) *lphost->h_addr_list);
-		saLocal.sin_addr.s_addr = inet_addr(pip);
-		//saLocal.sin_addr.s_addr = htonl(INADDR_ANY);
-	}	
-	else{
-		saLocal.sin_addr.s_addr = inet_addr(addr.c_str());
+		saddr = ((LPIN_ADDR)lphost->h_addr)->s_addr;
+		// 127.0.0.1
+		//char* pip = inet_ntoa(*(struct in_addr *) *lphost->h_addr_list);
 	}
+
+	SOCKADDR_IN saLocal;
+	saLocal.sin_family = AF_INET;
+	saLocal.sin_port = htons(port);
+	saLocal.sin_addr.s_addr = saddr;
+	//saLocal.sin_addr.s_addr = htonl(INADDR_ANY);
 
 	int nRet = bind(m_hSock, (PSOCKADDR)&saLocal, sizeof(SOCKADDR_IN));
 	if (nRet == SOCKET_ERROR){
