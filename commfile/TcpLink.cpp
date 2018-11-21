@@ -26,6 +26,8 @@ bool CTcpLink::Create()
 		return false;
 	}
 
+	// 服务器accept产生的socket
+	// 立即关闭模式, 不用等待发送完毕
 	struct linger lgr;
 	lgr.l_onoff = TRUE;
 	lgr.l_linger = 0;
@@ -52,10 +54,11 @@ bool CTcpLink::CreateClient()
 		return false;
 	}
 	
-	// 立即关闭模式
+	// 客户端产生的socket
+	// 等待发送完毕再关闭
 	struct linger lgr;
-	lgr.l_onoff = TRUE;
-	lgr.l_linger = 0;
+	lgr.l_onoff = FALSE;
+	lgr.l_linger = 1;
 	setsockopt(m_hSock, SOL_SOCKET, SO_LINGER, (const char *)&lgr, sizeof(struct linger));
 
 	HANDLE h = CreateIoCompletionPort((HANDLE)m_hSock, m_hIOCP, 0, 0);

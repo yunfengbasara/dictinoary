@@ -35,7 +35,7 @@ bool CNetTcp::Init(int threadN)
 	}
 
 	for (int s = 0; s < threadN; s++) {
-		m_lIocpNetPool.push_back(std::thread(&CNetTcp::IOCPRoutine, this, m_hIOCP));
+		m_lIocpPool.push_back(std::thread(&CNetTcp::IOCPRoutine, this, m_hIOCP));
 	}
 
 	// test
@@ -59,13 +59,13 @@ bool CNetTcp::Init(int threadN)
 
 bool CNetTcp::Uninit()
 {
-	for (auto &pThread : m_lIocpNetPool) {
+	for (auto &pThread : m_lIocpPool) {
 		// win10 sdk可直接使用智能指针
 		EXITOVLP *pOvlp = new EXITOVLP;
 		::PostQueuedCompletionStatus(m_hIOCP, 0, 0, &pOvlp->ovlp);
 	}
 
-	for (auto &pThread : m_lIocpNetPool) {
+	for (auto &pThread : m_lIocpPool) {
 		pThread.join();
 	}
 	return true;
@@ -135,7 +135,9 @@ void CNetTcp::IOCPRoutine(HANDLE hIOCP)
 
 void CNetTcp::OnConn(std::shared_ptr<CONNOVLP> pOvlp)
 {
-	setsockopt(pOvlp->hSock, SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, NULL, 0);
+	// connectex回调后设置socket属性
+	setsockopt(pOvlp->hSock, SOL_SOCKET, 
+		SO_UPDATE_CONNECT_CONTEXT, NULL, 0);
 
 	TcpLink pLink;
 	{
@@ -191,6 +193,9 @@ void CNetTcp::OnRecv(std::shared_ptr<RECVOVLP> pOvlp)
 
 void CNetTcp::OnAcpt(std::shared_ptr<ACPTOVLP> pOvlp)
 {
+	setsockopt(pOvlp->hAcceptSock, SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, 
+		(char*)&pOvlp->hSock, sizeof(pOvlp->hSock));
+
 	TcpLink pAccept(new CTcpLink(m_hIOCP, pOvlp->hAcceptSock));
 	{
 		std::unique_lock<std::mutex> lock(m_nMutex);
@@ -202,14 +207,14 @@ void CNetTcp::OnAcpt(std::shared_ptr<ACPTOVLP> pOvlp)
 		m_lLinkList.insert(std::make_pair(pAccept->GetSocket(), pAccept));
 	}
 
-	//SOCKADDR* psaLocal = NULL;
-	//SOCKADDR* psaRemote = NULL;
-	//int nLocalLen, nRemoteLen;
-	//GetAcceptExSockaddrs(pOvlp->data, 0,
-	//	sizeof(SOCKADDR_IN) + 16,
-	//	sizeof(SOCKADDR_IN) + 16,
-	//	&psaLocal, &nLocalLen,
-	//	&psaRemote, &nRemoteLen);
+	SOCKADDR_IN* psaLocal = NULL;
+	SOCKADDR_IN* psaRemote = NULL;
+	int nLocalLen, nRemoteLen;
+	GetAcceptExSockaddrs(pOvlp->data, 0,
+		sizeof(SOCKADDR_IN) + 16,
+		sizeof(SOCKADDR_IN) + 16,
+		(PSOCKADDR*)&psaLocal, &nLocalLen,
+		(PSOCKADDR*)&psaRemote, &nRemoteLen);
 
 	if (!pAccept->Recv()) {
 		pAccept->Close();

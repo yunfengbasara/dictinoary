@@ -23,8 +23,8 @@ private:
 
 private:
 	HANDLE											m_hIOCP;			// IOCP通知句柄
-	std::vector<std::thread>						m_lIocpNetPool;		// IOCP事件线程池
+	std::vector<std::thread>						m_lIocpPool;		// IOCP事件线程池
 	typedef std::shared_ptr<CTcpLink>				TcpLink;
 	std::mutex										m_nMutex;
-	std::map<SOCKET, TcpLink>						m_lLinkList;		// IOCP管理通知的SOCKET链表
+	std::map<SOCKET, TcpLink>						m_lLinkList;		// 管理socket
 };
