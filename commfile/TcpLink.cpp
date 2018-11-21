@@ -277,8 +277,8 @@ bool CTcpLink::Send(const char* pData, uint32_t cbSize)
 
 	SENDOVLP *pOvlp = new SENDOVLP;
 	pOvlp->hSock = m_hSock;
-	memcpy(pOvlp->data, pData, cbSize);
 	pOvlp->dwBytes = cbSize;
+	memcpy_s(pOvlp->data, IOBUF_SENDMAXSIZE, pData, cbSize);
 
 	WSABUF wsaBufs[1];
 	wsaBufs[0].buf = (char*)pOvlp->data;

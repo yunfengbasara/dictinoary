@@ -30,6 +30,9 @@
     <ClInclude Include="TcpLink.h">
       <Filter>net</Filter>
     </ClInclude>
+    <ClInclude Include="Packet.h">
+      <Filter>packet</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp" />
@@ -54,6 +57,9 @@
     <ClCompile Include="TcpLink.cpp">
       <Filter>net</Filter>
     </ClCompile>
+    <ClCompile Include="Packet.cpp">
+      <Filter>packet</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="thread">
@@ -70,6 +76,9 @@
     </Filter>
     <Filter Include="net">
       <UniqueIdentifier>{f88c5fb6-cf03-4b75-afd9-dc5372e6a41a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="packet">
+      <UniqueIdentifier>{262df47b-d178-40fe-8547-d236c0b2d1f4}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
 </Project>
