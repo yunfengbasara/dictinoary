@@ -43,16 +43,21 @@ bool CNetTcp::Init(int threadN)
 	server->CreateServer("", 8888);
 	server->Listen();
 
-	TcpLink client(new CTcpLink(m_hIOCP));
-	client->CreateClient();
-
 	// 提前放如队列
 	m_lLinkList.insert(std::make_pair(server->GetSocket(), server));
-	m_lLinkList.insert(std::make_pair(client->GetSocket(), client));
-	LogWrite(INFO, _T("Server Link %d"), server->GetSocket());
-	LogWrite(INFO, _T("Client Link %d"), client->GetSocket());
 
-	client->Connect("", 8888);
+	for (int i = 0; i < 10; i++) {
+		TcpLink client(new CTcpLink(m_hIOCP));
+		client->CreateClient();	
+		{
+			std::unique_lock<std::mutex> lock(m_nMutex);
+			m_lLinkList.insert(std::make_pair(client->GetSocket(), client));
+		}
+		client->Connect("", 8888);
+	}
+	
+	//LogWrite(INFO, _T("Server Link %d"), server->GetSocket());
+	//LogWrite(INFO, _T("Client Link %d"), client->GetSocket());
 
 	return true;
 }
@@ -133,20 +138,25 @@ void CNetTcp::IOCPRoutine(HANDLE hIOCP)
 	}
 }
 
+CNetTcp::TcpLink CNetTcp::FindLink(SOCKET hSocket)
+{
+	std::unique_lock<std::mutex> lock(m_nMutex);
+	auto pit = m_lLinkList.find(hSocket);
+	if (pit == m_lLinkList.end()) {
+		return NULL;
+	}
+	return pit->second;
+}
+
 void CNetTcp::OnConn(std::shared_ptr<CONNOVLP> pOvlp)
 {
 	// connectex回调后设置socket属性
 	setsockopt(pOvlp->hSock, SOL_SOCKET, 
 		SO_UPDATE_CONNECT_CONTEXT, NULL, 0);
 
-	TcpLink pLink;
-	{
-		std::unique_lock<std::mutex> lock(m_nMutex);
-		auto pit = m_lLinkList.find(pOvlp->hSock);
-		if (pit == m_lLinkList.end()) {
-			return;
-		}
-		pLink = pit->second;
+	TcpLink pLink = FindLink(pOvlp->hSock);
+	if (pLink == NULL) {
+		return;
 	}
 
 	SOCKADDR_IN local;
@@ -159,35 +169,38 @@ void CNetTcp::OnConn(std::shared_ptr<CONNOVLP> pOvlp)
 	int remotelen = sizeof(SOCKADDR_IN);
 	getpeername(pOvlp->hSock, (PSOCKADDR)&remote, &remotelen);
 
-	pLink->Recv();
-	pLink->Send("hello world", 11);
+	if (!pLink->Recv()) {
+		pLink->Close();
+		return;
+	}
+
+	pLink->SendPkt();
 	pLink->Close();
 }
 
 void CNetTcp::OnSend(std::shared_ptr<SENDOVLP> pOvlp)
 {
-	std::basic_string<char> str((char*)pOvlp->data, pOvlp->dwBytes);
-	std::basic_string<wchar_t> wstr;
-	char2wchar(str, wstr);
-	LogWrite(INFO, _T("OnSend %s"), wstr.c_str());
+	TcpLink pLink = FindLink(pOvlp->hSock);
+	if (pLink == NULL) {
+		return;
+	}
+
+	if (!pLink->OnSendStream(
+		pOvlp->data, pOvlp->dwBytes)) {
+		pLink->Close();
+	}
 }
 
 void CNetTcp::OnRecv(std::shared_ptr<RECVOVLP> pOvlp)
 {
-	std::basic_string<char> str((char*)pOvlp->data, pOvlp->dwBytes);
-	std::basic_string<wchar_t> wstr;
-	char2wchar(str, wstr);
-	LogWrite(INFO, _T("OnRecv %s"), wstr.c_str());
+	TcpLink pLink = FindLink(pOvlp->hSock);
+	if (pLink == NULL) {
+		return;
+	}
 
-	{
-		std::unique_lock<std::mutex> lock(m_nMutex);
-		auto pit = m_lLinkList.find(pOvlp->hSock);
-		if (pit == m_lLinkList.end()) {
-			return;
-		}
-		if (!pit->second->Recv()) {
-			pit->second->Close();
-		}
+	if (!pLink->OnRecvStream(
+		pOvlp->data, pOvlp->dwBytes)) {
+		pLink->Close();
 	}
 }
 
@@ -196,28 +209,31 @@ void CNetTcp::OnAcpt(std::shared_ptr<ACPTOVLP> pOvlp)
 	setsockopt(pOvlp->hAcceptSock, SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, 
 		(char*)&pOvlp->hSock, sizeof(pOvlp->hSock));
 
-	TcpLink pAccept(new CTcpLink(m_hIOCP, pOvlp->hAcceptSock));
-	{
-		std::unique_lock<std::mutex> lock(m_nMutex);
-		auto it = m_lLinkList.find(pOvlp->hSock);
-		if (it != m_lLinkList.end()) {
-			it->second->Accept();
-		}
-		LogWrite(INFO, _T("OnAcpt Link %d"), pAccept->GetSocket());
-		m_lLinkList.insert(std::make_pair(pAccept->GetSocket(), pAccept));
+	// 监听socket再次发送accept事件
+	TcpLink pLink = FindLink(pOvlp->hSock);
+	if (pLink != NULL) {
+		pLink->Accept();
 	}
 
-	SOCKADDR_IN* psaLocal = NULL;
-	SOCKADDR_IN* psaRemote = NULL;
-	int nLocalLen, nRemoteLen;
-	GetAcceptExSockaddrs(pOvlp->data, 0,
-		sizeof(SOCKADDR_IN) + 16,
-		sizeof(SOCKADDR_IN) + 16,
-		(PSOCKADDR*)&psaLocal, &nLocalLen,
-		(PSOCKADDR*)&psaRemote, &nRemoteLen);
+	// 插入新socket
+	{
+		//LogWrite(INFO, _T("OnAcpt Link %d"), pOvlp->hAcceptSock);
+		std::unique_lock<std::mutex> lock(m_nMutex);
+		TcpLink pAccept(new CTcpLink(m_hIOCP, pOvlp->hAcceptSock));
+		m_lLinkList.insert(std::make_pair(pAccept->GetSocket(), pAccept));
 
-	if (!pAccept->Recv()) {
-		pAccept->Close();
+		SOCKADDR_IN* psaLocal = NULL;
+		SOCKADDR_IN* psaRemote = NULL;
+		int nLocalLen, nRemoteLen;
+		GetAcceptExSockaddrs(pOvlp->data, 0,
+			sizeof(SOCKADDR_IN) + 16,
+			sizeof(SOCKADDR_IN) + 16,
+			(PSOCKADDR*)&psaLocal, &nLocalLen,
+			(PSOCKADDR*)&psaRemote, &nRemoteLen);
+
+		if (!pAccept->Recv()) {
+			pAccept->Close();
+		}
 	}
 }
 

@@ -15,6 +15,9 @@ public:
 private:
 	void IOCPRoutine(HANDLE hIOCP);
 
+	typedef std::shared_ptr<CTcpLink> TcpLink;
+	TcpLink	FindLink(SOCKET);
+	
 	void OnConn(std::shared_ptr<CONNOVLP> pOvlp);
 	void OnSend(std::shared_ptr<SENDOVLP> pOvlp);
 	void OnRecv(std::shared_ptr<RECVOVLP> pOvlp);
@@ -24,7 +27,6 @@ private:
 private:
 	HANDLE											m_hIOCP;			// IOCP通知句柄
 	std::vector<std::thread>						m_lIocpPool;		// IOCP事件线程池
-	typedef std::shared_ptr<CTcpLink>				TcpLink;
 	std::mutex										m_nMutex;
 	std::map<SOCKET, TcpLink>						m_lLinkList;		// 管理socket
 };

@@ -5,6 +5,7 @@
 CTcpLink::CTcpLink(HANDLE pIOCP, SOCKET hSocket)
 	: m_hSock(hSocket)
 	, m_hIOCP(pIOCP)
+	, m_pPkt(new CPacket)
 {
 	if (m_hSock != INVALID_SOCKET) {
 		Create();
@@ -31,7 +32,8 @@ bool CTcpLink::Create()
 	struct linger lgr;
 	lgr.l_onoff = TRUE;
 	lgr.l_linger = 0;
-	setsockopt(m_hSock, SOL_SOCKET, SO_LINGER, (const char *)&lgr, sizeof(struct linger));
+	setsockopt(m_hSock, SOL_SOCKET, SO_LINGER, 
+		(const char *)&lgr, sizeof(struct linger));
 
 	HANDLE h = CreateIoCompletionPort((HANDLE)m_hSock, m_hIOCP, 0, 0);
 	if (h != m_hIOCP) {
@@ -59,7 +61,8 @@ bool CTcpLink::CreateClient()
 	struct linger lgr;
 	lgr.l_onoff = FALSE;
 	lgr.l_linger = 1;
-	setsockopt(m_hSock, SOL_SOCKET, SO_LINGER, (const char *)&lgr, sizeof(struct linger));
+	setsockopt(m_hSock, SOL_SOCKET, SO_LINGER, 
+		(const char *)&lgr, sizeof(struct linger));
 
 	HANDLE h = CreateIoCompletionPort((HANDLE)m_hSock, m_hIOCP, 0, 0);
 	if (h != m_hIOCP) {
@@ -257,41 +260,13 @@ bool CTcpLink::Recv()
 
 	int ret = WSARecv(pOvlp->hSock, wsaBufs, 1,
 		&dwBytes, &dwFlags, &pOvlp->ovlp, NULL);
-	if (ret == SOCKET_ERROR) {
-		return false;
-	}
-
-	int error = WSAGetLastError();
-	if (error == WSA_IO_PENDING) {
+	if (ret == 0) {
 		return true;
 	}
 
-	return false;
-}
-
-bool CTcpLink::Send(const char* pData, uint32_t cbSize)
-{
-	if (m_hSock == INVALID_SOCKET) {
-		return false;
-	}
-
-	SENDOVLP *pOvlp = new SENDOVLP;
-	pOvlp->hSock = m_hSock;
-	pOvlp->dwBytes = cbSize;
-	memcpy_s(pOvlp->data, IOBUF_SENDMAXSIZE, pData, cbSize);
-
-	WSABUF wsaBufs[1];
-	wsaBufs[0].buf = (char*)pOvlp->data;
-	wsaBufs[0].len = pOvlp->dwBytes;
-
-	int ret = WSASend(pOvlp->hSock, wsaBufs, 1,
-		&pOvlp->dwBytes, 0, &pOvlp->ovlp, NULL);
-	if (ret == SOCKET_ERROR) {
-		return false;
-	}
-
 	int error = WSAGetLastError();
-	if (error == WSA_IO_PENDING) {
+	if (error == WSA_IO_PENDING ||
+		error == 0) {
 		return true;
 	}
 
@@ -330,4 +305,98 @@ bool CTcpLink::Close()
 	}
 
 	return true;
+}
+
+void CTcpLink::SendPkt()
+{
+	std::shared_ptr<CPacket::PKT> pPkt(new CPacket::PKT);
+	BYTE temp[] = { "hello world" };
+	pPkt->m_nBody.append(temp);
+	m_pPkt->SendPkt(pPkt);
+
+	uint32_t sendBufferSize = m_pPkt->GetSendBytesLen();
+	if (sendBufferSize == 0) {
+		return;
+	}
+
+	uint32_t sendLen = min(IOBUF_SENDMAXSIZE, sendBufferSize);
+
+	std::basic_string<BYTE> needSendBuf;
+	if (!m_pPkt->GetSendBytes(needSendBuf, sendLen)) {
+		return;
+	}
+
+	if (!Send(needSendBuf)) {
+		return;
+	}
+}
+
+bool CTcpLink::OnSendStream(const PBYTE pData, uint32_t len)
+{
+	if (!m_pPkt->EraseSendBytes(len)) {
+		return false;
+	}
+
+	uint32_t sendBufferSize = m_pPkt->GetSendBytesLen();
+	if (sendBufferSize == 0) {
+		return true;
+	}
+
+	uint32_t sendLen = min(IOBUF_SENDMAXSIZE, sendBufferSize);
+
+	std::basic_string<BYTE> needSendBuf;
+	if (!m_pPkt->GetSendBytes(needSendBuf, sendLen)) {
+		return false;
+	}
+
+	if (!Send(needSendBuf)) {
+		return false;
+	}
+
+	return true;
+}
+
+bool CTcpLink::OnRecvStream(const PBYTE pData, uint32_t len)
+{
+	if (len == 0) {
+		// 这里是个关键点，如果返回接收数据为0
+		// 服务器能判断客户端断开
+		//LogWrite(EROR, _T("OnRecvStream Close %d"), m_hSock);
+		return false;
+	}
+
+	m_pPkt->Unpacket(pData, len);
+
+	return Recv();
+}
+
+bool CTcpLink::Send(const std::basic_string<BYTE>& sendBytes)
+{
+	if (m_hSock == INVALID_SOCKET) {
+		return false;
+	}
+
+	SENDOVLP *pOvlp = new SENDOVLP;
+	pOvlp->hSock = m_hSock;
+	pOvlp->dwBytes = sendBytes.size();
+	memcpy_s(pOvlp->data, IOBUF_SENDMAXSIZE, 
+		sendBytes.c_str(), sendBytes.size());
+
+	WSABUF wsaBufs[1];
+	wsaBufs[0].buf = (char*)pOvlp->data;
+	wsaBufs[0].len = pOvlp->dwBytes;
+
+	int ret = WSASend(pOvlp->hSock, wsaBufs, 1,
+		&pOvlp->dwBytes, 0, &pOvlp->ovlp, NULL);
+	if (ret == 0) {
+		return true;
+	}
+
+	int error = WSAGetLastError();
+	if (error == WSA_IO_PENDING ||
+		error == 0) {
+		return true;
+	}
+
+	return false;
 }

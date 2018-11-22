@@ -11,25 +11,31 @@ public:
 	const static uint32_t	HEAD_SIGN	= 0xFEEFFEEF;		// 数据包头部标识
 	const static uint32_t	HEAD_LEN	= 16;				// 数据包头长度
 
-	// 网络层的二进制流格式
-	struct PKT {
+	// 包头格式
+	struct PKTHEAD {
 		uint32_t	m_nSign		= HEAD_SIGN;		// 数据头标识[默认空]
 		uint32_t	m_nFlag		= 0;				// encryption + zip
 		uint32_t	m_nPktId	= 0;				// 数据id
-		uint32_t	m_nPktLen	= 0;				// body长度
-		PBYTE		m_pBody		= NULL;				// body数组
-		~PKT() {
-			delete[] m_pBody;
-		}
+		uint32_t	m_nPktLen	= HEAD_LEN;			// body长度(包括头部长度)
 	};
 
-	bool SendPkt(std::shared_ptr<PKT> pPkt);		// 打包
-	bool Unpacket(PBYTE pData, uint32_t len);		// 解包
+	// 整包格式
+	struct PKT {
+		PKTHEAD						m_nHead;		// 包头
+		std::basic_string<BYTE>		m_nBody;		// 包体
+	};
+
+	void SendPkt(std::shared_ptr<PKT> pPkt);		// 打包
+	void Unpacket(PBYTE pData, uint32_t len);		// 解包
+	size_t GetRecvBytesLen();
+	size_t GetSendBytesLen();
+	bool   GetSendBytes(std::basic_string<BYTE>&, uint32_t);
+	bool   EraseSendBytes(uint32_t);
 
 private:
-	bool CheckPkt(std::basic_string<BYTE>&);		// 检查包是否完整
-	bool AnalyzeHead(std::basic_string<BYTE>&);		// 解析包头
-	bool AnalyzeBody(std::basic_string<BYTE>&);		// 解析包体
+	bool CheckPKT(std::basic_string<BYTE>&);		// 检查包体
+	std::shared_ptr<CPacket::PKT> AnalyzePKT(		// 解析整包
+		std::basic_string<BYTE>&);					
 
 private:
 	std::mutex						m_nRecvMtx;
@@ -38,5 +44,4 @@ private:
 
 	std::mutex						m_nSendMtx;
 	std::basic_string<BYTE>			m_nSendBytes;	// 即将发送的数据缓存
-	std::list<std::shared_ptr<PKT>>	m_lstSendPkt;	// 即将发送的完整数据包队列
 };

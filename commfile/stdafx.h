@@ -15,6 +15,7 @@
 #include <io.h>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <mutex>
 #include <thread>
 #include <list>

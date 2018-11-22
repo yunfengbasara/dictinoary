@@ -1,5 +1,6 @@
 #pragma once
 #include "NetApi.h"
+#include "Packet.h"
 
 // socket连接 IOCP非阻塞模式
 // 所有调用函数均为非阻塞
@@ -24,11 +25,18 @@ public:
 	bool Accept();
 
 	// normal
-	bool Recv();
-	bool Send(const char* pData, uint32_t cbSize);
 	bool Close();
+	bool Recv();
+	bool Send(const std::basic_string<BYTE>&);
+
+	// iocp callback
+	bool OnSendStream(const PBYTE pData, uint32_t len);
+	bool OnRecvStream(const PBYTE pData, uint32_t len);
+
+	void SendPkt();		// 发送数据包
 
 private:
-	HANDLE	 m_hIOCP;
-	SOCKET	 m_hSock;
+	HANDLE						m_hIOCP;
+	SOCKET						m_hSock;
+	std::shared_ptr<CPacket>	m_pPkt;
 };
