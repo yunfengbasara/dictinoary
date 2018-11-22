@@ -58,6 +58,7 @@ int main()
 	netCore.Init();
 
 	getchar();
+	netCore.Uninit();
 	//netCore.Uninit();
 
 	//CAnalyze dict;

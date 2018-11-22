@@ -25,8 +25,8 @@ public:
 		std::basic_string<BYTE>		m_nBody;		// 包体
 	};
 
-	void SendPkt(std::shared_ptr<PKT> pPkt);		// 打包
-	void Unpacket(PBYTE pData, uint32_t len);		// 解包
+	void   Packet(std::shared_ptr<PKT> pPkt);		// 打包
+	void   Unpacket(PBYTE pData, uint32_t len);		// 解包
 	size_t GetRecvBytesLen();
 	size_t GetSendBytesLen();
 	bool   GetSendBytes(std::basic_string<BYTE>&, uint32_t);

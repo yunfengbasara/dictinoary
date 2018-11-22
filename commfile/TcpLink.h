@@ -8,12 +8,9 @@ class CTcpLink
 {
 public:
 	CTcpLink(HANDLE pIOCP, SOCKET hSocket = INVALID_SOCKET);
-	~CTcpLink();
+	virtual ~CTcpLink();
 
 	SOCKET&	GetSocket();
-
-	// accept socket
-	bool Create();
 
 	// client
 	bool CreateClient();
@@ -30,8 +27,8 @@ public:
 	bool Send(const std::basic_string<BYTE>&);
 
 	// iocp callback
-	bool OnSendStream(const PBYTE pData, uint32_t len);
-	bool OnRecvStream(const PBYTE pData, uint32_t len);
+	bool OnSend(const PBYTE pData, uint32_t len);
+	bool OnRecv(const PBYTE pData, uint32_t len);
 
 	void SendPkt();		// 发送数据包
 

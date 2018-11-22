@@ -1,6 +1,7 @@
 #pragma once
 #include "NetApi.h"
 #include "TcpLink.h"
+#include "ClientLink.h"
 
 // IOCP֪ͨ
 class CNetTcp
@@ -13,9 +14,9 @@ public:
 	bool Uninit();
 
 private:
-	void IOCPRoutine(HANDLE hIOCP);
-
 	typedef std::shared_ptr<CTcpLink> TcpLink;
+	typedef std::shared_ptr<CClientLink> ClientLink;
+	void IOCPRoutine(HANDLE hIOCP);
 	TcpLink	FindLink(SOCKET);
 	
 	void OnConn(std::shared_ptr<CONNOVLP> pOvlp);

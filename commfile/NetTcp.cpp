@@ -42,17 +42,12 @@ bool CNetTcp::Init(int threadN)
 	TcpLink server(new CTcpLink(m_hIOCP));
 	server->CreateServer("", 8888);
 	server->Listen();
-
-	// 提前放如队列
 	m_lLinkList.insert(std::make_pair(server->GetSocket(), server));
 
 	for (int i = 0; i < 10; i++) {
-		TcpLink client(new CTcpLink(m_hIOCP));
-		client->CreateClient();	
-		{
-			std::unique_lock<std::mutex> lock(m_nMutex);
-			m_lLinkList.insert(std::make_pair(client->GetSocket(), client));
-		}
+		std::unique_lock<std::mutex> lock(m_nMutex);
+		ClientLink client(new CClientLink(m_hIOCP));	
+		m_lLinkList.insert(std::make_pair(client->GetSocket(), client));
 		client->Connect("", 8888);
 	}
 	
@@ -175,7 +170,6 @@ void CNetTcp::OnConn(std::shared_ptr<CONNOVLP> pOvlp)
 	}
 
 	pLink->SendPkt();
-	pLink->Close();
 }
 
 void CNetTcp::OnSend(std::shared_ptr<SENDOVLP> pOvlp)
@@ -185,7 +179,7 @@ void CNetTcp::OnSend(std::shared_ptr<SENDOVLP> pOvlp)
 		return;
 	}
 
-	if (!pLink->OnSendStream(
+	if (!pLink->OnSend(
 		pOvlp->data, pOvlp->dwBytes)) {
 		pLink->Close();
 	}
@@ -198,7 +192,7 @@ void CNetTcp::OnRecv(std::shared_ptr<RECVOVLP> pOvlp)
 		return;
 	}
 
-	if (!pLink->OnRecvStream(
+	if (!pLink->OnRecv(
 		pOvlp->data, pOvlp->dwBytes)) {
 		pLink->Close();
 	}
@@ -219,8 +213,12 @@ void CNetTcp::OnAcpt(std::shared_ptr<ACPTOVLP> pOvlp)
 	{
 		//LogWrite(INFO, _T("OnAcpt Link %d"), pOvlp->hAcceptSock);
 		std::unique_lock<std::mutex> lock(m_nMutex);
-		TcpLink pAccept(new CTcpLink(m_hIOCP, pOvlp->hAcceptSock));
+		ClientLink pAccept(new CClientLink(m_hIOCP, pOvlp->hAcceptSock));
 		m_lLinkList.insert(std::make_pair(pAccept->GetSocket(), pAccept));
+
+		if (!pAccept->Recv()) {
+			pAccept->Close();
+		}
 
 		SOCKADDR_IN* psaLocal = NULL;
 		SOCKADDR_IN* psaRemote = NULL;
@@ -230,10 +228,6 @@ void CNetTcp::OnAcpt(std::shared_ptr<ACPTOVLP> pOvlp)
 			sizeof(SOCKADDR_IN) + 16,
 			(PSOCKADDR*)&psaLocal, &nLocalLen,
 			(PSOCKADDR*)&psaRemote, &nRemoteLen);
-
-		if (!pAccept->Recv()) {
-			pAccept->Close();
-		}
 	}
 }
 

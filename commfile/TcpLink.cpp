@@ -7,13 +7,13 @@ CTcpLink::CTcpLink(HANDLE pIOCP, SOCKET hSocket)
 	, m_hIOCP(pIOCP)
 	, m_pPkt(new CPacket)
 {
-	if (m_hSock != INVALID_SOCKET) {
-		Create();
-	}
 }
 
 CTcpLink::~CTcpLink()
 {
+	//static int io = 0;
+	//io++;
+	//LogWrite(INFO, _T("CTcpLink clean %d"), io);
 }
 
 SOCKET&	CTcpLink::GetSocket()
@@ -21,47 +21,22 @@ SOCKET&	CTcpLink::GetSocket()
 	return m_hSock;
 }
 
-bool CTcpLink::Create()
+bool CTcpLink::CreateClient()
 {
+	if (m_hSock == INVALID_SOCKET) {
+		m_hSock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP,
+			NULL, 0, WSA_FLAG_OVERLAPPED);
+	}
+
 	if (m_hSock == INVALID_SOCKET) {
 		return false;
 	}
 
-	// 服务器accept产生的socket
 	// 立即关闭模式, 不用等待发送完毕
 	struct linger lgr;
 	lgr.l_onoff = TRUE;
 	lgr.l_linger = 0;
-	setsockopt(m_hSock, SOL_SOCKET, SO_LINGER, 
-		(const char *)&lgr, sizeof(struct linger));
-
-	HANDLE h = CreateIoCompletionPort((HANDLE)m_hSock, m_hIOCP, 0, 0);
-	if (h != m_hIOCP) {
-		closesocket(m_hSock);
-		return false;
-	}
-
-	return true;
-}
-
-bool CTcpLink::CreateClient()
-{
-	if (m_hSock != INVALID_SOCKET) {
-		return false;
-	}
-
-	m_hSock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP,
-		NULL, 0, WSA_FLAG_OVERLAPPED);
-	if (m_hSock == INVALID_SOCKET) {
-		return false;
-	}
-	
-	// 客户端产生的socket
-	// 等待发送完毕再关闭
-	struct linger lgr;
-	lgr.l_onoff = FALSE;
-	lgr.l_linger = 1;
-	setsockopt(m_hSock, SOL_SOCKET, SO_LINGER, 
+	setsockopt(m_hSock, SOL_SOCKET, SO_LINGER,
 		(const char *)&lgr, sizeof(struct linger));
 
 	HANDLE h = CreateIoCompletionPort((HANDLE)m_hSock, m_hIOCP, 0, 0);
@@ -75,9 +50,6 @@ bool CTcpLink::CreateClient()
 
 bool CTcpLink::Connect(const std::string addr, uint32_t port)
 {
-	if (m_hSock == INVALID_SOCKET) {
-		return false;
-	}
 	// connectEx函数通知IOCP
 	// 如果没有connectEx函数用connect
 	// connect之后记得NotifyRecv()
@@ -138,10 +110,6 @@ bool CTcpLink::Connect(const std::string addr, uint32_t port)
 
 bool CTcpLink::CreateServer(const std::string addr, uint32_t port)
 {
-	if (m_hSock != INVALID_SOCKET) {
-		return false;
-	}
-
 	m_hSock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP,
 		NULL, 0, WSA_FLAG_OVERLAPPED);
 	if (m_hSock == INVALID_SOCKET) {
@@ -190,10 +158,6 @@ bool CTcpLink::CreateServer(const std::string addr, uint32_t port)
 
 bool CTcpLink::Listen()
 {
-	if (m_hSock == INVALID_SOCKET) {
-		return false;
-	}
-
 	// 如果作为服务器监听
 	SYSTEM_INFO si;
 	::GetSystemInfo(&si);
@@ -205,7 +169,9 @@ bool CTcpLink::Listen()
 	}
 
 	for (uint32_t n = 0; n < nBlock; n++) {
-		Accept();
+		if (!Accept()) {
+			return false;
+		}
 	}
 
 	return true;
@@ -213,10 +179,6 @@ bool CTcpLink::Listen()
 
 bool CTcpLink::Accept()
 {
-	if (m_hSock == INVALID_SOCKET) {
-		return false;
-	}
-
 	SOCKET hSock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP,
 		NULL, 0, WSA_FLAG_OVERLAPPED);
 	if (hSock == INVALID_SOCKET) {
@@ -245,10 +207,6 @@ bool CTcpLink::Accept()
 
 bool CTcpLink::Recv()
 {
-	if (m_hSock == INVALID_SOCKET) {
-		return false;
-	}
-
 	RECVOVLP *pOvlp = new RECVOVLP;
 	pOvlp->hSock = m_hSock;
 
@@ -275,10 +233,6 @@ bool CTcpLink::Recv()
 
 bool CTcpLink::Close()
 {
-	if (m_hSock == INVALID_SOCKET) {
-		return false;
-	}
-
 	int rc = 0;
 	LPFN_DISCONNECTEX DisconnectEx;
 	GUID guid = WSAID_DISCONNECTEX;
@@ -309,10 +263,11 @@ bool CTcpLink::Close()
 
 void CTcpLink::SendPkt()
 {
-	std::shared_ptr<CPacket::PKT> pPkt(new CPacket::PKT);
 	BYTE temp[] = { "hello world" };
-	pPkt->m_nBody.append(temp);
-	m_pPkt->SendPkt(pPkt);
+
+	std::shared_ptr<CPacket::PKT> pPkt(new CPacket::PKT);
+	pPkt->m_nBody = temp;
+	m_pPkt->Packet(pPkt);
 
 	uint32_t sendBufferSize = m_pPkt->GetSendBytesLen();
 	if (sendBufferSize == 0) {
@@ -331,7 +286,7 @@ void CTcpLink::SendPkt()
 	}
 }
 
-bool CTcpLink::OnSendStream(const PBYTE pData, uint32_t len)
+bool CTcpLink::OnSend(const PBYTE pData, uint32_t len)
 {
 	if (!m_pPkt->EraseSendBytes(len)) {
 		return false;
@@ -356,7 +311,7 @@ bool CTcpLink::OnSendStream(const PBYTE pData, uint32_t len)
 	return true;
 }
 
-bool CTcpLink::OnRecvStream(const PBYTE pData, uint32_t len)
+bool CTcpLink::OnRecv(const PBYTE pData, uint32_t len)
 {
 	if (len == 0) {
 		// 这里是个关键点，如果返回接收数据为0
@@ -367,15 +322,14 @@ bool CTcpLink::OnRecvStream(const PBYTE pData, uint32_t len)
 
 	m_pPkt->Unpacket(pData, len);
 
+	// 处理业务
+
+
 	return Recv();
 }
 
 bool CTcpLink::Send(const std::basic_string<BYTE>& sendBytes)
 {
-	if (m_hSock == INVALID_SOCKET) {
-		return false;
-	}
-
 	SENDOVLP *pOvlp = new SENDOVLP;
 	pOvlp->hSock = m_hSock;
 	pOvlp->dwBytes = sendBytes.size();

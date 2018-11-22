@@ -127,6 +127,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="ClientLink.h" />
     <ClInclude Include="convert.h" />
     <ClInclude Include="Log.h" />
     <ClInclude Include="LogApi.h" />
@@ -141,6 +142,7 @@
     <ClInclude Include="Timer.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="ClientLink.cpp" />
     <ClCompile Include="convert.cpp" />
     <ClCompile Include="Log.cpp" />
     <ClCompile Include="LogApi.cpp" />
