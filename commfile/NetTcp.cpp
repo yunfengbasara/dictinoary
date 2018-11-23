@@ -82,7 +82,7 @@ void CNetTcp::IOCPRoutine(HANDLE hIOCP)
 		if (!::GetQueuedCompletionStatus(hIOCP, 
 			&dwBytes, &nEvent, &pOvlp, INFINITE)) {
 
-			// 关闭socket响应
+			// IOCP错误，比如连接异常
 			dwStatus = WSAGetLastError();	
 			auto pContext = CONTAINING_RECORD(pOvlp, OVLPSTRUCT, ovlp);
 			CLOSOVLP* pClos = (CLOSOVLP*)pContext;
@@ -170,6 +170,7 @@ void CNetTcp::OnConn(std::shared_ptr<CONNOVLP> pOvlp)
 	}
 
 	pLink->SendPkt();
+	//pLink->Close();
 }
 
 void CNetTcp::OnSend(std::shared_ptr<SENDOVLP> pOvlp)
@@ -233,9 +234,6 @@ void CNetTcp::OnAcpt(std::shared_ptr<ACPTOVLP> pOvlp)
 
 void CNetTcp::OnClos(std::shared_ptr<CLOSOVLP> pOvlp)
 {
-	closesocket(pOvlp->hSock);
-	{
-		std::unique_lock<std::mutex> lock(m_nMutex);
-		m_lLinkList.erase(pOvlp->hSock);
-	}
+	std::unique_lock<std::mutex> lock(m_nMutex);
+	m_lLinkList.erase(pOvlp->hSock);
 }

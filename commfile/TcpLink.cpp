@@ -11,9 +11,7 @@ CTcpLink::CTcpLink(HANDLE pIOCP, SOCKET hSocket)
 
 CTcpLink::~CTcpLink()
 {
-	//static int io = 0;
-	//io++;
-	//LogWrite(INFO, _T("CTcpLink clean %d"), io);
+	closesocket(m_hSock);
 }
 
 SOCKET&	CTcpLink::GetSocket()

@@ -46,11 +46,7 @@ void CPacket::Unpacket(PBYTE pData, uint32_t len)
 		std::basic_string<char> str((char*)pPkt->m_nBody.c_str(), pPkt->m_nBody.size());
 		std::basic_string<wchar_t> wstr;
 		char2wchar(str, wstr);
-		//LogWrite(INFO, _T("packet %s"), wstr.c_str());
-
-		static int recv = 0;
-		recv++;
-		LogWrite(INFO, _T("Recv Packet %d"), recv);
+		LogWrite(INFO, _T("packet %s"), wstr.c_str());
 	}
 }
 
